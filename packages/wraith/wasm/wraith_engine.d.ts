@@ -148,6 +148,10 @@ export class Engine {
      * Shape operator runs together to form programming-font ligatures.
      */
     set_ligatures(enabled: boolean): void;
+    /**
+     * daimon patch — transparent background: default-bg cells become alpha=0 instead of filled.
+     */
+    set_transparency(enabled: boolean): void;
     take_events(): Array<any>;
     text(selected: boolean): string;
     theme(fg: number, bg: number, cursor: number): void;
@@ -180,6 +184,10 @@ export class Engine {
 export class Headless {
     free(): void;
     [Symbol.dispose](): void;
+    /**
+     * Clear dirty flags after the renderer has consumed the current grid snapshot.
+     */
+    acknowledge_damage(): void;
     cell(x: number, y: number): Array<any>;
     /**
      * One block in the `commands()` layout, or undefined.
@@ -189,9 +197,25 @@ export class Headless {
     command_text(id: number, input: boolean): any;
     commands(): Array<any>;
     /**
+     * Cursor shape: 0=block, 1=bar, 2=underline (matches libghostty CursorStyle).
+     */
+    cursor_style(): number;
+    /**
      * Hash of the visible grid, colours and cursor as hex; see `Core::digest`.
      */
     digest(): string;
+    /**
+     * One byte per row: 1 = dirty since last `acknowledge_damage()`, 0 = clean.
+     */
+    dirty_rows(): Uint8Array;
+    /**
+     * Flat grid as `Uint32Array`: [scalar, fg, bg, flags] × cols×rows, row-major.
+     * `scalar` is the Unicode codepoint for single-char cells; 0 for multi-char
+     * clusters (use `cell(x,y)` for the text of those). Colors are 0xBBGGRR.
+     * One WASM→JS copy; zero per-cell round-trips. Call `acknowledge_damage()`
+     * after consuming to reset dirty tracking.
+     */
+    grid(): Uint32Array;
     /**
      * The new viewport offset, or -1 when there is no prompt in that direction.
      */
@@ -380,16 +404,21 @@ export interface InitOutput {
     readonly engine_set_face: (a: number, b: number, c: number, d: number) => [number, number];
     readonly engine_set_image_limit: (a: number, b: number) => [number, number];
     readonly engine_set_ligatures: (a: number, b: number) => [number, number];
+    readonly engine_set_transparency: (a: number, b: number) => void;
     readonly engine_take_events: (a: number) => any;
     readonly engine_text: (a: number, b: number) => [number, number, number, number];
     readonly engine_theme: (a: number, b: number, c: number, d: number) => void;
     readonly engine_write: (a: number, b: number, c: number) => void;
+    readonly headless_acknowledge_damage: (a: number) => void;
     readonly headless_cell: (a: number, b: number, c: number) => [number, number, number];
     readonly headless_command: (a: number, b: number) => any;
     readonly headless_command_marks: (a: number) => [number, number];
     readonly headless_command_text: (a: number, b: number, c: number) => [number, number, number];
     readonly headless_commands: (a: number) => any;
+    readonly headless_cursor_style: (a: number) => number;
     readonly headless_digest: (a: number) => [number, number, number, number];
+    readonly headless_dirty_rows: (a: number) => [number, number];
+    readonly headless_grid: (a: number) => [number, number, number];
     readonly headless_has_commands: (a: number) => number;
     readonly headless_jump_to_prompt: (a: number, b: number) => number;
     readonly headless_key: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
@@ -430,14 +459,14 @@ export interface InitOutput {
     readonly surface_set_effects: (a: number, b: number, c: number, d: number, e: number) => any;
     readonly surface_unpresented: (a: number) => number;
     readonly surface_width: (a: number) => number;
-    readonly wasm_bindgen_6325b3aeff69b3ec___convert__closures_____invoke___js_sys_f456faec7bc9c5ad___Function_fn_wasm_bindgen_6325b3aeff69b3ec___JsValue_____wasm_bindgen_6325b3aeff69b3ec___sys__Undefined___js_sys_f456faec7bc9c5ad___Function_fn_wasm_bindgen_6325b3aeff69b3ec___JsValue_____wasm_bindgen_6325b3aeff69b3ec___sys__Undefined_______true_: (a: number, b: number, c: any, d: any) => void;
-    readonly wasm_bindgen_6325b3aeff69b3ec___convert__closures_____invoke___wasm_bindgen_6325b3aeff69b3ec___JsValue__core_ed718c3d60ebd546___result__Result_____wasm_bindgen_6325b3aeff69b3ec___JsError___true_: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen_6325b3aeff69b3ec___convert__closures_____invoke___wasm_bindgen_6325b3aeff69b3ec___sys__JsNullable_wgpu_766cd644c37f70b3___backend__webgpu__webgpu_sys__gen_GpuError__GpuError___core_ed718c3d60ebd546___result__Result_____wasm_bindgen_6325b3aeff69b3ec___JsError___true_: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen_6325b3aeff69b3ec___convert__closures_____invoke___wasm_bindgen_6325b3aeff69b3ec___sys__JsNullable_wgpu_766cd644c37f70b3___backend__webgpu__webgpu_sys__gen_GpuError__GpuError___core_ed718c3d60ebd546___result__Result_____wasm_bindgen_6325b3aeff69b3ec___JsError___true__109: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen_6325b3aeff69b3ec___convert__closures_____invoke___wasm_bindgen_6325b3aeff69b3ec___sys__JsNullable_wgpu_766cd644c37f70b3___backend__webgpu__webgpu_sys__gen_GpuError__GpuError___core_ed718c3d60ebd546___result__Result_____wasm_bindgen_6325b3aeff69b3ec___JsError___true__112: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen_6325b3aeff69b3ec___convert__closures_____invoke___wasm_bindgen_6325b3aeff69b3ec___sys__JsNullable_wgpu_766cd644c37f70b3___backend__webgpu__webgpu_sys__gen_GpuError__GpuError___core_ed718c3d60ebd546___result__Result_____wasm_bindgen_6325b3aeff69b3ec___JsError___true__113: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen_6325b3aeff69b3ec___convert__closures_____invoke___wgpu_766cd644c37f70b3___backend__webgpu__webgpu_sys__gen_GpuDeviceLostInfo__GpuDeviceLostInfo______true_: (a: number, b: number, c: any) => void;
-    readonly wasm_bindgen_6325b3aeff69b3ec___convert__closures_____invoke___wgpu_766cd644c37f70b3___backend__webgpu__webgpu_sys__gen_GpuDeviceLostInfo__GpuDeviceLostInfo______true__111: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_5433d2b59516dfa8___convert__closures_____invoke___js_sys_ef4e47ecfdeec9fc___Function_fn_wasm_bindgen_5433d2b59516dfa8___JsValue_____wasm_bindgen_5433d2b59516dfa8___sys__Undefined___js_sys_ef4e47ecfdeec9fc___Function_fn_wasm_bindgen_5433d2b59516dfa8___JsValue_____wasm_bindgen_5433d2b59516dfa8___sys__Undefined_______true_: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen_5433d2b59516dfa8___convert__closures_____invoke___wasm_bindgen_5433d2b59516dfa8___JsValue__core_f0fd674eaa06beef___result__Result_____wasm_bindgen_5433d2b59516dfa8___JsError___true_: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen_5433d2b59516dfa8___convert__closures_____invoke___wasm_bindgen_5433d2b59516dfa8___sys__JsNullable_wgpu_360f19c78ae13abe___backend__webgpu__webgpu_sys__gen_GpuError__GpuError___core_f0fd674eaa06beef___result__Result_____wasm_bindgen_5433d2b59516dfa8___JsError___true_: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen_5433d2b59516dfa8___convert__closures_____invoke___wasm_bindgen_5433d2b59516dfa8___sys__JsNullable_wgpu_360f19c78ae13abe___backend__webgpu__webgpu_sys__gen_GpuError__GpuError___core_f0fd674eaa06beef___result__Result_____wasm_bindgen_5433d2b59516dfa8___JsError___true__114: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen_5433d2b59516dfa8___convert__closures_____invoke___wasm_bindgen_5433d2b59516dfa8___sys__JsNullable_wgpu_360f19c78ae13abe___backend__webgpu__webgpu_sys__gen_GpuError__GpuError___core_f0fd674eaa06beef___result__Result_____wasm_bindgen_5433d2b59516dfa8___JsError___true__117: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen_5433d2b59516dfa8___convert__closures_____invoke___wasm_bindgen_5433d2b59516dfa8___sys__JsNullable_wgpu_360f19c78ae13abe___backend__webgpu__webgpu_sys__gen_GpuError__GpuError___core_f0fd674eaa06beef___result__Result_____wasm_bindgen_5433d2b59516dfa8___JsError___true__118: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen_5433d2b59516dfa8___convert__closures_____invoke___wgpu_360f19c78ae13abe___backend__webgpu__webgpu_sys__gen_GpuDeviceLostInfo__GpuDeviceLostInfo______true_: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen_5433d2b59516dfa8___convert__closures_____invoke___wgpu_360f19c78ae13abe___backend__webgpu__webgpu_sys__gen_GpuDeviceLostInfo__GpuDeviceLostInfo______true__116: (a: number, b: number, c: any) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

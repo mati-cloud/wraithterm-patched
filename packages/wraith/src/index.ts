@@ -29,6 +29,8 @@ import type { CommandBlock } from './command-types.js';
 import { EffectsController, type WraithEffects } from './effects.js';
 export * from './types.js';
 export * from './recording.js';
+export { default as initWasm, Headless } from '../wasm/wraith_engine.js';
+export { KEY_CODES } from './keycodes.js';
 export type { PlayerOptions, WraithPlayer, PlayerControlsOptions } from './player.js';
 export * from './command-types.js';
 export { parseOsc133, type Osc133Step } from './osc133.js';
@@ -265,6 +267,7 @@ export class Wraith {
   private binary = new Signal<Uint8Array>();
   private title = new Signal<string>();
   private bell = new Signal<void>();
+  private clipboard = new Signal<string>(); // daimon patch — OSC 52
   private errors = new Signal<Error>();
   private statistics = new Signal<WraithStats>();
   private resizes = new Signal<{ cols: number; rows: number }>();
@@ -582,6 +585,9 @@ export class Wraith {
         break;
       case 'bell':
         this.bell.emit();
+        break;
+      case 'clipboard': // daimon patch — OSC 52
+        this.clipboard.emit(reply.text as string);
         break;
       case 'modes':
         this.mouseTracking = reply.mouse;
@@ -907,6 +913,10 @@ export class Wraith {
   }
   onBell(listener: Listener<void>): Disposable {
     return this.bell.on(listener);
+  }
+  /** daimon patch — the program copied text (OSC 52). Writing it is up to the embedder. */
+  onClipboard(listener: Listener<string>): Disposable {
+    return this.clipboard.on(listener);
   }
   onError(listener: Listener<Error>): Disposable {
     return this.errors.on(listener);
@@ -1280,10 +1290,22 @@ export class Wraith {
           (event.metaKey || (event.ctrlKey && event.shiftKey)) &&
           event.key.toLowerCase() === 'c'
         ) {
+          // daimon patch — nothing selected: leave the clipboard alone (it may hold what
+          // the program just copied). WebKit lets a page write the clipboard only during
+          // the key event, so the item is handed over now and its text resolves after
+          // the worker answers.
+          if (!this.selected) return;
           event.preventDefault();
-          void this.getText(true)
-            .then((text) => navigator.clipboard.writeText(text))
-            .catch((error) => this.errors.emit(error));
+          const text = this.getText(true);
+          const done =
+            typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write
+              ? navigator.clipboard.write([
+                  new ClipboardItem({
+                    'text/plain': text.then((t) => new Blob([t], { type: 'text/plain' })),
+                  }),
+                ])
+              : text.then((t) => navigator.clipboard.writeText(t));
+          void done.catch((error) => this.errors.emit(error));
           return;
         }
         if ((event.metaKey || (event.ctrlKey && event.shiftKey)) && event.key.toLowerCase() === 'v')
@@ -1422,7 +1444,13 @@ export class Wraith {
       this.send({
         type: 'mouse',
         action,
-        button: event.buttons === 0 && action === 2 ? 0 : ([1, 3, 2][event.button] ?? 0),
+        button:
+          // daimon patch — a move's event.button is -1: the button held during a drag
+          // comes from buttons (bits: 1 left, 2 right, 4 middle). Without it every drag
+          // reached the program as button-less motion, which drag tracking (1002) drops.
+          action === 2
+            ? event.buttons & 1 ? 1 : event.buttons & 2 ? 2 : event.buttons & 4 ? 3 : 0
+            : ([1, 3, 2][event.button] ?? 0),
         mods: mods(event),
         x: Math.max(
           0,

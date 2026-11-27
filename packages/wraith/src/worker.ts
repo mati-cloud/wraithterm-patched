@@ -244,6 +244,28 @@ function createSession(
   }
   const encoder = new TextEncoder(),
     decoder = new TextDecoder();
+  // daimon patch — OSC 52 clipboard writes. The engine drops them, so they are
+  // read from the bytes on their way in and posted like title/bell.
+  const latin1 = new TextDecoder('latin1');
+  const utf8 = new TextDecoder();
+  const OSC52 = /\x1b\]52;[^;\x07\x1b]*;([A-Za-z0-9+/=]*)(\x07|\x1b\\)?/g;
+  let osc52Carry = '';
+  function clipboardWrites(bytes: Uint8Array) {
+    const text = osc52Carry + latin1.decode(bytes);
+    osc52Carry = '';
+    if (!text.includes('\x1b]52;')) return;
+    for (const match of text.matchAll(OSC52)) {
+      if (!match[2]) {
+        if (match.index! + match[0].length === text.length && text.length - match.index! < 8 << 20)
+          osc52Carry = text.slice(match.index!);
+        continue;
+      }
+      if (!match[1]) continue;
+      try {
+        post({ type: 'clipboard', text: utf8.decode(Uint8Array.from(atob(match[1]), (c) => c.charCodeAt(0))) });
+      } catch { /* not base64 */ }
+    }
+  }
   function post(reply: Reply, transfers: Transferable[] = []) {
     endpoint.postMessage(reply, transfers);
   }
@@ -700,6 +722,8 @@ function createSession(
             ),
       );
       engine = await created;
+      // daimon patch — transparent background so the terminal blends into the block UI.
+      if (!surface) engine.set_transparency(true);
       if (!surface) {
         for (const font of command.fonts) engine.add_font(font);
         command.faces.forEach((face, i) => face && engine!.set_face(i + 1, face));
@@ -723,6 +747,7 @@ function createSession(
     if (!engine || disposed) throw new Error('Wraith engine is not running');
     switch (command.type) {
       case 'write': {
+        clipboardWrites(command.bytes); // daimon patch — OSC 52
         const marked = tracing && command.bytes.some((b) => b >= 0x61 && b <= 0x7a);
         engine.write(command.bytes);
         a11y.changed();

@@ -1,3 +1,23 @@
+# wraithterm-patched — daimon fork
+
+A patched fork of [betterclever/wraithterm](https://github.com/betterclever/wraithterm), maintained for [daimon](https://github.com/mati-cloud/daimon)'s block-based terminal UI. daimon consumes this via a local `file:` dependency (`ui/package.json`).
+
+**Why the fork:** daimon's renderer needs terminal features the upstream public API doesn't expose, plus a few input/clipboard fixes. We keep the patches here rather than vendoring a build, so we can rebase on upstream cleanly.
+
+**What we patched (overview):**
+
+- **Flat grid snapshot API** — a single `grid()` call returns the whole cell grid as one `Uint32Array` (`[scalar, fg, bg, flags]` per cell), with `dirty_rows()` / `acknowledge_damage()` for damage tracking and `cursor_style()`. daimon's custom renderer reads cells in one WASM→JS copy instead of per-cell round-trips.
+- **Transparent background** — `set_transparency()` makes default-background cells alpha-0 so the terminal blends into daimon's block UI.
+- **OSC 52 clipboard** — upstream drops OSC 52; we sniff it off the write stream and surface it via `onClipboard()`, so programs can set the system clipboard.
+- **Copy-key behavior** — Cmd/Ctrl-Shift-C with no selection no longer clobbers the clipboard; uses the async `ClipboardItem` path to satisfy WebKit's write-during-keyevent rule.
+- **Drag mouse buttons** — motion events (`event.button === -1`) now derive the held button from `event.buttons`, so drag tracking (mode 1002) receives the correct button instead of button-less motion.
+
+Rebuilt WASM (`packages/wraith/wasm/`) is committed so consumers don't need the Rust/Zig toolchain.
+
+Upstream pin: see [`upstream.json`](upstream.json).
+
+---
+
 <p align="center">
   <a href="https://wraithterm.com">
     <picture>

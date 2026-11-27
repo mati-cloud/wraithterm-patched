@@ -187,6 +187,40 @@ impl Headless {
         result.push(&JsValue::from(cell.flags));
         Ok(result)
     }
+
+    /// Flat grid as `Uint32Array`: [scalar, fg, bg, flags] × cols×rows, row-major.
+    /// `scalar` is the Unicode codepoint for single-char cells; 0 for multi-char
+    /// clusters (use `cell(x,y)` for the text of those). Colors are 0xBBGGRR.
+    /// One WASM→JS copy; zero per-cell round-trips. Call `acknowledge_damage()`
+    /// after consuming to reset dirty tracking.
+    pub fn grid(&mut self) -> Result<js_sys::Uint32Array, JsValue> {
+        self.core.update().map_err(error)?;
+        let cells = &self.core.state.cells;
+        let out = js_sys::Uint32Array::new_with_length((cells.len() * 4) as u32);
+        for (i, cell) in cells.iter().enumerate() {
+            let base = (i * 4) as u32;
+            out.set_index(base,     cell.scalar);
+            out.set_index(base + 1, cell.foreground);
+            out.set_index(base + 2, cell.background);
+            out.set_index(base + 3, cell.flags);
+        }
+        Ok(out)
+    }
+
+    /// One byte per row: 1 = dirty since last `acknowledge_damage()`, 0 = clean.
+    pub fn dirty_rows(&self) -> Vec<u8> {
+        self.core.state.dirty.iter().map(|&d| d as u8).collect()
+    }
+
+    /// Clear dirty flags after the renderer has consumed the current grid snapshot.
+    pub fn acknowledge_damage(&mut self) {
+        self.core.acknowledge_damage();
+    }
+
+    /// Cursor shape: 0=block, 1=bar, 2=underline (matches libghostty CursorStyle).
+    pub fn cursor_style(&self) -> u32 {
+        self.core.frame.cursor_style
+    }
 }
 
 #[wasm_bindgen]
@@ -650,6 +684,10 @@ impl Engine {
     /// Unlike `fence`, this returns at once and holds no borrow while waiting.
     pub fn on_submitted_work_done(&self, done: js_sys::Function) {
         self.renderer.on_submitted_work_done(done);
+    }
+    /// daimon patch — transparent background: default-bg cells become alpha=0 instead of filled.
+    pub fn set_transparency(&mut self, enabled: bool) {
+        self.renderer.set_transparency(enabled);
     }
 }
 

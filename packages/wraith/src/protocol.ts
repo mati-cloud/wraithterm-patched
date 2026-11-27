@@ -100,6 +100,7 @@ export type Reply =
   | { type: 'data'; bytes: Uint8Array }
   | { type: 'title'; title: string }
   | { type: 'bell' }
+  | { type: 'clipboard'; text: string } // daimon patch — OSC 52
   | { type: 'modes'; mouse: boolean; alternateScroll: boolean }
   | { type: 'cursor'; x: number; y: number }
   | { type: 'render'; frame: number }
