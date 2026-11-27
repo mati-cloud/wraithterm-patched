@@ -2,9 +2,13 @@
 import { readFile, writeFile, mkdir, copyFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { generateParser } from './generate-xterm-parser.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const upstream = resolve(root, 'node_modules/@wraith-terminal/xterm-base');
+// daimon patch — resolve the aliased dep instead of assuming it is hoisted to the
+// root node_modules. npm hoists; bun nests it under packages/wraith/node_modules.
+const require = createRequire(resolve(root, 'packages/wraith/package.json'));
+const upstream = dirname(require.resolve('@wraith-terminal/xterm-base/package.json'));
 const typings = (await readFile(resolve(upstream, 'typings/xterm.d.ts'), 'utf8'))
   .replace(/declare module '@xterm\/xterm' \{/, '')
   .replace(/\}\s*$/, '')

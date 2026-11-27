@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "build:engine": "node scripts/build-engine.mjs",
-    "build": "npm run build:engine && npm run build:sdk",
+    "build": "bun run build:engine && bun run build:sdk",
     "build:sdk": "node scripts/sync-xterm.mjs && tsc -p packages/wraith/tsconfig.json",
     "dev": "vite --host 127.0.0.1",
     "build:demo": "vite build",
@@ -33,7 +33,7 @@
     "test:pipes": "node scripts/pipes-browser-test.mjs",
     "benchmark:pipes": "node scripts/pipes-benchmark.mjs",
     "test:retained": "node scripts/retained-rows-test.mjs",
-    "deploy:site": "npm run build:sdk && npm run build:demo && wrangler deploy",
+    "deploy:site": "bun run build:sdk && bun run build:demo && wrangler deploy",
     "test:input": "node scripts/test-production-input.mjs",
     "test:native-interaction": "node scripts/native-interaction-test.mjs",
     "test:native-keys": "node scripts/native-keys-test.mjs",

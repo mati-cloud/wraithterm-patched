@@ -1,13 +1,19 @@
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import ts from 'typescript';
 
 /** Keep xterm's dispatcher/continuation intact while batching ordinary params.
  * This specialization is generated from the installed, pinned MIT-licensed source.
  * It must pass differential tests before its timings are considered. */
 export async function generateParser(root) {
+  // daimon patch — resolve the aliased dep rather than assuming root hoisting;
+  // bun nests it under packages/wraith/node_modules, npm hoists to root.
+  const require = createRequire(`${root}/packages/wraith/package.json`);
+  const upstream = dirname(require.resolve('@wraith-terminal/xterm-base/package.json'));
   const source = await readFile(
-    `${root}/node_modules/@wraith-terminal/xterm-base/src/common/parser/EscapeSequenceParser.ts`,
+    `${upstream}/src/common/parser/EscapeSequenceParser.ts`,
     'utf8',
   );
   const sha256 = createHash('sha256').update(source).digest('hex');
