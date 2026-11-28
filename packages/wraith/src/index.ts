@@ -1407,6 +1407,7 @@ export class Wraith {
     this.input.addEventListener(
       'focus',
       () => {
+        if (!this.started) return;
         this.placeInput();
         this.send({ type: 'focus', focused: true });
       },
@@ -1415,6 +1416,7 @@ export class Wraith {
     this.input.addEventListener(
       'blur',
       () => {
+        if (!this.started) return;
         this.interceptedKeys.clear();
         this.send({ type: 'focus', focused: false });
       },
